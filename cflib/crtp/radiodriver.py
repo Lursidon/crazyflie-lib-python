@@ -262,7 +262,8 @@ class RadioDriver(CRTPDriver):
         self._thread.stop()
 
         # Close the USB dongle
-        self._radio_manager.close()
+        if self._radio_manager:
+            self._radio_manager.close()
         self._radio_manager = None
 
         while not self.out_queue.empty():
@@ -366,14 +367,17 @@ class RadioDriver(CRTPDriver):
         return found
 
     def get_status(self):
-        radio_manager = _RadioManager(0)
+        try:
+            radio_manager = _RadioManager(0)
 
-        with radio_manager as cradio:
-            ver = cradio.version
+            with radio_manager as cradio:
+                ver = cradio.version
 
-        radio_manager.close()
+            radio_manager.close()
 
-        return 'Crazyradio version {}'.format(ver)
+            return 'Crazyradio version {}'.format(ver)
+        except Exception:
+            return 'Crazyradio not found'
 
     def get_name(self):
         return 'radio'

@@ -35,6 +35,10 @@ from cflib.crtp.crtpstack import CRTPPort
 __author__ = 'Bitcraze AB'
 __all__ = ['Commander']
 
+TYPE_STOP = 0
+TYPE_VELOCITY_WORLD = 1
+TYPE_ZDISTANCE = 2
+
 
 class Commander():
     """
@@ -72,4 +76,39 @@ class Commander():
         pk = CRTPPacket()
         pk.port = CRTPPort.COMMANDER
         pk.data = struct.pack('<fffH', roll, -pitch, yaw, thrust)
+        self._cf.send_packet(pk)
+
+    def send_stop_setpoint(self):
+        """
+        Send STOP setpoing, stopping the motors and (potentially) falling.
+        """
+        pk = CRTPPacket()
+        pk.port = CRTPPort.COMMANDER_GENERIC
+        pk.data = struct.pack('<B', TYPE_STOP)
+        self._cf.send_packet(pk)
+
+    def send_velocity_world_setpoint(self, vx, vy, vz, yawrate):
+        """
+        Send Velocity in the world frame of reference setpoint.
+
+        vx, vy, vz are in m/s
+        yawrate is in rad/s
+        """
+        pk = CRTPPacket()
+        pk.port = CRTPPort.COMMANDER_GENERIC
+        pk.data = struct.pack('<Bffff', TYPE_VELOCITY_WORLD,
+                              vx, vy, vz, yawrate)
+        self._cf.send_packet(pk)
+
+    def send_zdistance_setpoint(self, roll, pitch, yawrate, zdistance):
+        """
+        Control mode where the height is send as an absolute setpoint (intended
+        to be the distance to the surface under the Crazflie).
+
+        Roll, pitch, yawrate are defined as rad, rad, rad/s
+        """
+        pk = CRTPPacket()
+        pk.port = CRTPPort.COMMANDER_GENERIC
+        pk.data = struct.pack('<Bffff', TYPE_ZDISTANCE,
+                              roll, pitch, yawrate, zdistance)
         self._cf.send_packet(pk)

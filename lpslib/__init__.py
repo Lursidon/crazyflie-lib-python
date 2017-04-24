@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 #     ||          ____  _ __
@@ -7,9 +6,7 @@
 #  +------+    / /_/ / / /_/ /__/ /  / /_/ / / /_/  __/
 #   ||  ||    /_____/_/\__/\___/_/   \__,_/ /___/\___/
 #
-#  Copyright (C) 2011-2013 Bitcraze AB
-#
-#  Crazyflie Nano Quadcopter Client
+#  Copyright (C) 2017 Bitcraze AB
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -24,29 +21,20 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA  02110-1301, USA.
+""" The LPS lib is an API that is used to communicate with Loco Positioning
+anchors.
+
+The main purpose of the lib is to manage LPP (Loco Positioning Protocol).
+
+Initially it will use a Crazyflie with a Loco Positioning deck as a bridge to
+transfer information to LoPo anchors, but may in the future use other means
+of transportation.
+
+Example:
+cf = Crazyflie()
+cf.open_link("radio://0/125")
+
+anchor = LoPoAnchor(cf)
+anchor.set_position(1, (1.23, 4.56, 7.89))
+
 """
-Used for sending external position to the Crazyflie
-"""
-
-__author__ = 'Bitcraze AB'
-__all__ = ['Extpos']
-
-
-class Extpos():
-    """
-    Used for sending its position to the Crazyflie
-    """
-
-    def __init__(self, crazyflie=None):
-        """
-        Initialize the Extpos object.
-        """
-        self._cf = crazyflie
-
-    def send_extpos(self, x, y, z):
-        """
-        Send the current Crazyflie X, Y, Z position. This is going to be
-        forwarded to the Crazyflie's position estimator.
-        """
-
-        self._cf.loc.send_extpos([x, y, z])
