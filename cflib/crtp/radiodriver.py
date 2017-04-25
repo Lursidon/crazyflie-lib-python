@@ -39,6 +39,9 @@ import struct
 import sys
 import threading
 
+#aesgcm functions
+import aesgcm_functions as aesgcm
+
 from .crtpstack import CRTPPacket
 from .exceptions import WrongUriType
 from cflib.crtp.crtpdriver import CRTPDriver
@@ -52,6 +55,8 @@ else:
 
 __author__ = 'Bitcraze AB'
 __all__ = ['RadioDriver']
+
+_pid_ = 0
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +238,29 @@ class RadioDriver(CRTPDriver):
                 return None
 
     def send_packet(self, pk):
+        
+        pid +=1
+        ad = bytes([])
+        
+        if(len(pk.data) > 21):
+            dataLength = 21
+            multipacket = true
+        else: 
+            dataLength = len(pk.data)
+        
+        
+        
+        ad += p.get_header
+        if multipacket:
+            ad += (0x80 + ((pid << 5) & 0x60) + (len(pk.data) & 0x1f))
+        else:
+            ad += (((pid << 5) & 0x60) + (len(pk.data) & 0x1f))
+        
+        iv, tag, ciphertext = aesgcm.encrypt(ad.tobytes(), pk.data.tobytes())
+        
+        fp = CRTPPacket()
+        fp.set_header(p._get_port, p._get_channel)
+        
         """ Send the packet pk though the link """
         try:
             self.out_queue.put(pk, True, 2)
