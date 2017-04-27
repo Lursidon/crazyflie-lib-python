@@ -56,7 +56,14 @@ else:
 __author__ = 'Bitcraze AB'
 __all__ = ['RadioDriver']
 
-_pid_ = 0
+pid = 0
+recPid = 0
+recAuthData = bytes()
+recInitVector = bytes()
+recTag = bytes()
+recCipherPackageData = bytes()
+prePid = 0
+messageComplete = False
 
 logger = logging.getLogger(__name__)
 
@@ -217,30 +224,61 @@ class RadioDriver(CRTPDriver):
         self.link_error_callback = link_error_callback
 
     def receive_packet(self, time=0):
+        
+        rp = CRTPPacket()
         """
         Receive a packet though the link. This call is blocking but will
         timeout and return None if a timeout is supplied.
         """
         if time == 0:
             try:
-                return self.in_queue.get(False)
+                rp = self.in_queue.get(False)
             except queue.Empty:
                 return None
         elif time < 0:
             try:
-                return self.in_queue.get(True)
+                rp = self.in_queue.get(True)
             except queue.Empty:
                 return None
         else:
             try:
-                return self.in_queue.get(True, time)
+                rp = self.in_queue.get(True, time)
             except queue.Empty:
                 return None
-
+        """unsplit and decrypt/wont work, need to use a debugger probably"""
+        if (len(rp.data) <= 10) && ((rp.data[1] & 0x60) != prePid):
+            return rp
+            
+        elif (rp.data[1] & 0x60) != prePid:
+        
+            prePid = rp.data[1] & 0x60
+            dataLength = (rp.data[1] & 0x1F)
+            if dataLength > 21:
+                dataLength = 21
+            
+            recAuthData += rp.data[0:2].tobytes()
+            recInitVector += rp.data[2:6].tobytes()
+            recTag += rp.data[6:10].tobytes()
+            recCipherPackageData += rp.data[10:dataLength].tobytes()
+            if (rp.data[1] & 0x80) != 0x80:
+                messageComplete = True
+            else :
+                messageComplete = False
+        elif (rp.data[1] & 0x60) == prePid:
+            dataLength = (rp.data[1] & 0x1F)
+            recCipherPackageData += rp.data[2:(dataLength-21)].tobytes()
+            messageComplete = True
+        if messageComplete:
+            rp.data = rp.data[1]
+            rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData)
+            return rp
+        
+    """probably wont work, need to debug this"""
     def send_packet(self, pk):
         
         pid +=1
-        ad = bytes([])
+        if pid > 3: 
+            pid = 0
         
         if(len(pk.data) > 21):
             dataLength = 21
@@ -249,18 +287,45 @@ class RadioDriver(CRTPDriver):
             dataLength = len(pk.data)
         
         
-        
+        ad = bytes([])
         ad += p.get_header
+        
         if multipacket:
-            ad += (0x80 + ((pid << 5) & 0x60) + (len(pk.data) & 0x1f))
+            pidbyte = (0x80 + ((pid << 5) & 0x60) + (len(pk.data) & 0x1f))
         else:
-            ad += (((pid << 5) & 0x60) + (len(pk.data) & 0x1f))
+            pidbyte = (((pid << 5) & 0x60) + (len(pk.data) & 0x1f))
+        
+        ad += pidbyte
         
         iv, tag, ciphertext = aesgcm.encrypt(ad.tobytes(), pk.data.tobytes())
         
         fp = CRTPPacket()
         fp.set_header(p._get_port, p._get_channel)
         
+        fp.data = bytearray(pidbyte)
+        fp.data += bytearray(iv)
+        fp.data += bytearray(tag[0:4])
+        fp.data += bytearray(ciphertext[0:dataLength])
+        
+        
+        try:
+            self.out_queue.put(fp, True, 2)
+        except queue.Full:
+            if self.link_error_callback:
+                self.link_error_callback('RadioDriver: Could not send packet'
+                                         ' to copter')
+        
+        if multipacket:
+            fp.data = bytearray(pidbyte)
+            fp.data += bytearray(ciphertext[dataLength:len(ciphertext)])
+            try:
+                self.out_queue.put(fp, True, 2)
+            except queue.Full:
+                if self.link_error_callback:
+                    self.link_error_callback('RadioDriver: Could not send packet'
+                                         ' to copter')
+        
+        '''
         """ Send the packet pk though the link """
         try:
             self.out_queue.put(pk, True, 2)
@@ -268,6 +333,7 @@ class RadioDriver(CRTPDriver):
             if self.link_error_callback:
                 self.link_error_callback('RadioDriver: Could not send packet'
                                          ' to copter')
+        '''
 
     def pause(self):
         self._thread.stop()
