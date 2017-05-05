@@ -280,7 +280,7 @@ class RadioDriver(CRTPDriver):
             messageComplete = True
         if messageComplete:
             rp.data = rp.data[1]
-            rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData.tobytes())
+            rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData)
             return rp
         
     """probably wont work, need to debug this"""

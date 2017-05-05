@@ -52,8 +52,10 @@ def decrypt(associated_data, iv, tag, ciphertext):
 def setKey(newKey):
     try:
         key = newKey
+        break
     except TypeError:
         return "Wrong type, should be a bytes object"
+        break
         
     return None
     
