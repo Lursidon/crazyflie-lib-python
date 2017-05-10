@@ -279,12 +279,16 @@ class RadioDriver(CRTPDriver):
             recCipherPackageData += rp.data[2:(dataLength-21)]
             messageComplete = True
         if messageComplete:
-            tmpBytearray = bytearray([])
-            tmpBytearray += bytearray([rp.data[1]])
+            tmpBytearray = bytearray([rp.data[1]])
             rp.data = tmpBytearray
-            rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData)
-            return rp
-        
+            try:
+                rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData)
+            except ValueError:
+                rp.data = b'Value error'
+            except :
+                rp.data = b'Unknown error'
+            
+        return rp
     """probably wont work, need to debug this"""
     def send_packet(self, pk):
         global pid
