@@ -266,21 +266,23 @@ class RadioDriver(CRTPDriver):
             if dataLength > 21:
                 dataLength = 21
             
-            recAuthData += rp.data[0:2].tobytes()
-            recInitVector += rp.data[2:6].tobytes()
-            recTag += rp.data[6:10].tobytes()
-            recCipherPackageData += rp.data[10:dataLength].tobytes()
+            recAuthData += rp.data[0:2]
+            recInitVector += rp.data[2:6]
+            recTag += rp.data[6:10]
+            recCipherPackageData += rp.data[10:dataLength]
             if (rp.data[1] & 0x80) != 0x80:
                 messageComplete = True
             else :
                 messageComplete = False
         elif (rp.data[1] & 0x60) == prePid:
             dataLength = (rp.data[1] & 0x1F)
-            recCipherPackageData += rp.data[2:(dataLength-21)].tobytes()
+            recCipherPackageData += rp.data[2:(dataLength-21)]
             messageComplete = True
         if messageComplete:
-            rp.data = rp.data[1]
-            rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData.tobytes())
+            tmpBytearray = bytearray([])
+            tmpBytearray += bytearray([rp.data[1]])
+            rp.data = tmpBytearray
+            rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData)
             return rp
         
     """probably wont work, need to debug this"""
@@ -310,10 +312,16 @@ class RadioDriver(CRTPDriver):
         
         ad += bytes([pidbyte])
         
-        iv, tag, ciphertext = aesgcm.encrypt(ad, pk.data)
+        clear = bytes()
+        for byte in pk.data:
+            clear += bytes([byte])
+        
+        iv, tag, ciphertext = aesgcm.encrypt(ad, clear)
         
         fp = CRTPPacket()
-        fp.set_header(p._get_port, p._get_channel)
+        
+        pkHeader = pk.get_header()
+        fp.set_header(((pkHeader & 0xF0) >> 4), (pkHeader & 0x03))
         
         fp.data = bytearray(pidbyte)
         fp.data += bytearray(iv)
