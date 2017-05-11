@@ -234,6 +234,7 @@ class RadioDriver(CRTPDriver):
         global recTag
         global recCipherPackageData
         global messageComplete
+        tmpout = bytearray()
 
         rp = CRTPPacket()
         """
@@ -255,7 +256,7 @@ class RadioDriver(CRTPDriver):
                 rp = self.in_queue.get(True, time)
             except queue.Empty:
                 return None
-        """unsplit and decrypt/wont work, need to use a debugger probably"""
+        """unsplit and decrypt"""
         if (len(rp.data) <= 10) and ((rp.data[1] & 0x60) != prePid):
             return rp
             
@@ -266,33 +267,40 @@ class RadioDriver(CRTPDriver):
             if dataLength > 21:
                 dataLength = 21
             
-            recAuthData += rp.data[0:2]
-            recInitVector += rp.data[2:6]
-            recTag += rp.data[6:10]
-            recCipherPackageData += rp.data[10:dataLength]
+            recAuthData += bytes(rp.data[0:2])
+            recInitVector += bytes(rp.data[2:6])
+            recTag += bytes(rp.data[6:10])
+            recCipherPackageData += bytes(rp.data[10:dataLength])
             if (rp.data[1] & 0x80) != 0x80:
                 messageComplete = True
             else :
                 messageComplete = False
         elif (rp.data[1] & 0x60) == prePid:
             dataLength = (rp.data[1] & 0x1F)
-            recCipherPackageData += rp.data[2:(dataLength-21)]
+            recCipherPackageData += bytes(rp.data[2:(dataLength-21)])
             messageComplete = True
         if messageComplete:
             tmpBytearray = bytearray([rp.data[1]])
             rp.data = tmpBytearray
             try:
                 rp.data += aesgcm.decrypt(recAuthData, recInitVector, recTag, recCipherPackageData)
+                #print('Receiving header: 0x%02x' % rp.get_header())
+                #print('Receiving: ' + '' .join("0x%02x " % b for b in rp.data))
             except ValueError:
                 rp.data = b'Value error'
+                #print('Value error')
             except :
                 rp.data = b'Unknown error'
+                #print('Unknown error')
             
         return rp
-    """probably wont work, need to debug this"""
+
     def send_packet(self, pk):
         global pid
         global multipacket
+        tmpout = bytearray()
+        
+        """Split and encrypt"""
         
     
         pid += 1
@@ -305,9 +313,8 @@ class RadioDriver(CRTPDriver):
         else: 
             dataLength = len(pk.data)
         
-        
         ad = bytes([])
-        ad += bytes([pk.data[0]])
+        ad += bytes([pk.get_header()])
         
         if multipacket:
             pidbyte = (0x80 + ((pid << 5) & 0x60) + (len(pk.data) & 0x1f))
@@ -326,15 +333,19 @@ class RadioDriver(CRTPDriver):
         
         pkHeader = pk.get_header()
         fp.set_header(((pkHeader & 0xF0) >> 4), (pkHeader & 0x03))
+        #fp.port = pk.get_header()
         
-        fp.data = bytearray(pidbyte)
+        fp.data = bytearray([pidbyte])
         fp.data += bytearray(iv)
         fp.data += bytearray(tag[0:4])
         fp.data += bytearray(ciphertext[0:dataLength])
         
         
+        
         try:
             self.out_queue.put(fp, True, 2)
+            #print('Sending 1 header: 0x%02x' % fp.get_header())
+            #print('Sending 1: '+ '' .join("0x%02x " % b for b in fp.data))
         except queue.Full:
             if self.link_error_callback:
                 self.link_error_callback('RadioDriver: Could not send packet'
@@ -342,9 +353,11 @@ class RadioDriver(CRTPDriver):
         
         if multipacket:
             fp.data = bytearray(pidbyte)
-            fp.data += bytearray(ciphertext[dataLength:len(ciphertext)])
+            fp.data += bytearray(ciphertext[dataLength:])
             try:
                 self.out_queue.put(fp, True, 2)
+                #print('Sending 2 header: 0x%02x' % fp.get_header())
+                #print('Sending 2: ' + '' .join("0x%02x " % b for b in fp.data))
             except queue.Full:
                 if self.link_error_callback:
                     self.link_error_callback('RadioDriver: Could not send packet'
