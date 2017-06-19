@@ -49,14 +49,9 @@ def decrypt(associated_data, iv, tag, ciphertext):
 
     # Decryption gets us the authenticated plaintext.
     # If the tag does not match an InvalidTag exception will be raised.
-    try :
-        return decryptor.update(ciphertext) + decryptor.finalize()
-    except CrypExc.InvalidTag:
-        return "Invalid Tag"
-    except CrypExc.InvalidKey:
-        return "invalid Key"
-    except CrypExc.InvalidSignature:
-        return "invalid Signature"
+
+    return decryptor.update(ciphertext) + decryptor.finalize()
+
     
 def setKey(newKey):
     try:

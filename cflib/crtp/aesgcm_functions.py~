@@ -43,19 +43,26 @@ def decrypt(associated_data, iv, tag, ciphertext):
 
     # We put associated_data back in or the tag will fail to verify
     # when we finalize the decryptor.
+    
     decryptor.authenticate_additional_data(associated_data)
+
 
     # Decryption gets us the authenticated plaintext.
     # If the tag does not match an InvalidTag exception will be raised.
-    return decryptor.update(ciphertext) + decryptor.finalize()
+    try :
+        return decryptor.update(ciphertext) + decryptor.finalize()
+    except CrypExc.InvalidTag:
+        return "Invalid Tag"
+    except CrypExc.InvalidKey:
+        return "invalid Key"
+    except CrypExc.InvalidSignature:
+        return "invalid Signature"
     
 def setKey(newKey):
     try:
         key = newKey
-        break
     except TypeError:
         return "Wrong type, should be a bytes object"
-        break
         
     return None
     
