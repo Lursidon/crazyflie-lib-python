@@ -82,8 +82,8 @@ HEADER_PORT_CHANNEL_MASK = 0xF3
 HEADER_PORT_MASK = 0xF0
 HEADER_CHANNEL_MASK = 0x03
 
-CIPHERED_PORT = 0x05
-CIPHERED_CHANNEL = 0x01
+CIPHERED_PORT = 0x0B
+CIPHERED_CHANNEL = 0x00
 
 pid = 0
 multipacket = False
@@ -285,6 +285,8 @@ class RadioDriver(CRTPDriver):
             except queue.Empty:
                 return None
         
+
+        
         if (rp.data[HEADER_POSITION] == IGNORE_HEADER or rp.get_header() == IGNORE_HEADER):
             if(ignoreCounter == 150):
                 #print('   Dropped FF header: 0x%02x' % rp.get_header())
@@ -292,7 +294,6 @@ class RadioDriver(CRTPDriver):
                 ignoreCounter = 0
             ignoreCounter += 1
             return rp
-            
             
         '''
         if ((rp.get_header() & 0xF0) == 0x00):
@@ -302,8 +303,8 @@ class RadioDriver(CRTPDriver):
         '''
         """unsplit and decrypt"""
         
-        print('      falling header: 0x%02x' % rp.get_header())
-        print('        falling data: ' + '' .join("0x%02x " % b for b in rp.data))
+        #print('      falling header: 0x%02x' % rp.get_header())
+        #print('        falling data: ' + '' .join("0x%02x " % b for b in rp.data))
         #print('        len(rp.data): %s' % len(rp.data))
         
         if (rp.data[PID_POSITION] & PID_NBR_MASK) != prePid:
@@ -315,7 +316,7 @@ class RadioDriver(CRTPDriver):
             if dataLength > MAX_DATA_IN_FIRST_PACKET:
                 dataLength = MAX_DATA_IN_FIRST_PACKET
             
-            recAuthData = bytes([rp.data[HEADER_POSITION]])
+            recAuthData = bytes([rp.data[HEADER_POSITION] & HEADER_PORT_CHANNEL_MASK])
             recAuthData += bytes([rp.data[PID_POSITION]])
             
             recInitVector = bytes()
@@ -391,7 +392,7 @@ class RadioDriver(CRTPDriver):
         global multipacket
         
         if(pk.get_header() == IGNORE_HEADER):
-            print('ignore packet sent')
+            #print('ignore packet sent')
             self.out_queue.put(pk, True, 2)
             
         """Split and encrypt"""
@@ -423,6 +424,7 @@ class RadioDriver(CRTPDriver):
             clear += bytes([byte])
         
         iv, tag, ciphertext = aesgcm.encrypt(ad, clear)
+        #print('     self decryption: ' + '' .join("0x%02x " % b for b in aesgcm.decrypt(ad, iv, tag[:4], ciphertext)))
         
         fp = CRTPPacket()
         
@@ -439,8 +441,8 @@ class RadioDriver(CRTPDriver):
         
         try:
             self.out_queue.put(fp, True, 2)
-            print('    Sending 1 header: 0x%02x' % fp.get_header())
-            print('           Sending 1: '+ '' .join("0x%02x " % b for b in fp.data))
+            #print('    Sending 1 header: 0x%02x' % fp.get_header())
+            #print('           Sending 1: '+ '' .join("0x%02x " % b for b in fp.data))
         except queue.Full:
             if self.link_error_callback:
                 self.link_error_callback('RadioDriver: Could not send packet'
@@ -452,8 +454,8 @@ class RadioDriver(CRTPDriver):
             fp.data += bytearray(ciphertext[dataLength:])
             try:
                 self.out_queue.put(fp, True, 2)
-                print('    Sending 2 header: 0x%02x' % fp.get_header())
-                print('           Sending 2: ' + '' .join("0x%02x " % b for b in fp.data))
+                #print('    Sending 2 header: 0x%02x' % fp.get_header())
+                #print('           Sending 2: ' + '' .join("0x%02x " % b for b in fp.data))
             except queue.Full:
                 if self.link_error_callback:
                     self.link_error_callback('RadioDriver: Could not send packet'
