@@ -286,13 +286,8 @@ class RadioDriver(CRTPDriver):
                 return None
         
 
-        
+        #filter the ignore header and push through.
         if (rp.data[HEADER_POSITION] == IGNORE_HEADER or rp.get_header() == IGNORE_HEADER):
-            if(ignoreCounter == 150):
-                #print('   Dropped FF header: 0x%02x' % rp.get_header())
-                #print('     Dropped FF data: ' + '' .join("0x%02x " % b for b in rp.data))
-                ignoreCounter = 0
-            ignoreCounter += 1
             return rp
             
         '''
@@ -301,14 +296,15 @@ class RadioDriver(CRTPDriver):
             print('Dropped 0? data: ' + '' .join("0x%02x " % b for b in rp.data))
             return rp
         '''
-        """unsplit and decrypt"""
         
-        #print('      falling header: 0x%02x' % rp.get_header())
-        #print('        falling data: ' + '' .join("0x%02x " % b for b in rp.data))
-        #print('        len(rp.data): %s' % len(rp.data))
-        
+
         if (rp.data[PID_POSITION] & PID_NBR_MASK) != prePid:
             
+            '''
+            Disassemble the packet into arrays for decryption.
+            Any packet with a different PID from the previous 
+            packet is passed through this code.
+            '''
             prePid = rp.data[PID_POSITION] & PID_NBR_MASK
             
             dataLength = (rp.data[PID_POSITION] & DATA_LENGTH_MASK)
@@ -338,14 +334,14 @@ class RadioDriver(CRTPDriver):
                 
                 
         elif (rp.data[PID_POSITION] & PID_NBR_MASK) == prePid:
+            '''
+            If a packet has the same PID as the previous packet
+            the packet is passed through here to complete the previous packet.
+            '''
             
             prePid = rp.data[PID_POSITION] & PID_NBR_MASK
-            #print('Receiving 2nd prePid: 0x%02x' % prePid)
         
             dataLength = (rp.data[PID_POSITION] & DATA_LENGTH_MASK) - MAX_DATA_IN_FIRST_PACKET
-            #print('Receiving 2nd DataLe: 0x%02x' % dataLength)
-            
-            #recCipherPackageData += bytes(rp.data[2:dataLength])
             
             for byte in rp.data[2:]:
                 recCipherPackageData += bytes([byte])
@@ -353,21 +349,16 @@ class RadioDriver(CRTPDriver):
             messageComplete = True
             
         
-        #print('    Package complete: %s' % messageComplete)
-        
         if messageComplete:
+            '''
+            When a packet is assembled and ready for decryption this part of the code is run.
+            '''
             messageComplete = False
             
             prePid = 100
             rpHeader = recAuthData[HEADER_POSITION]
             
-            #tmpBytearray = bytearray([rp.data[0]])
             rp.data = bytearray()
-            
-            #print('    Receiving AuData: ' + '' .join("0x%02x " % b for b in recAuthData))
-            #print('    Receiving IniVec: ' + '' .join("0x%02x " % b for b in recInitVector))
-            #print('       Receiving Tag: ' + '' .join("0x%02x " % b for b in recTag))
-            #print('    Receiving Cipher: ' + '' .join("0x%02x " % b for b in recCipherPackageData))
             
             rp.set_header((rpHeader & HEADER_PORT_MASK) >> 4, rpHeader & HEADER_CHANNEL_MASK)
             
@@ -382,8 +373,6 @@ class RadioDriver(CRTPDriver):
             except CrypExc.InvalidSignature:
                 print('          Tag status: Invalid Signature')
                 
-            #print('    Returning header: 0x%02x' % rp.get_header())
-            #print('      Returning data: ' + '' .join("0x%02x " % b for b in rp.data))
             return rp
         
 
@@ -392,10 +381,13 @@ class RadioDriver(CRTPDriver):
         global multipacket
         
         if(pk.get_header() == IGNORE_HEADER):
-            #print('ignore packet sent')
             self.out_queue.put(pk, True, 2)
             
-        """Split and encrypt"""
+        '''
+        Sending a packet. The packet gets a PID, the length is determined, 
+        additional data is added, IV generated and encrypted ready to send.
+        
+        '''
         
     
         pid += 1
@@ -424,13 +416,10 @@ class RadioDriver(CRTPDriver):
             clear += bytes([byte])
         
         iv, tag, ciphertext = aesgcm.encrypt(ad, clear)
-        #print('     self decryption: ' + '' .join("0x%02x " % b for b in aesgcm.decrypt(ad, iv, tag[:4], ciphertext)))
         
         fp = CRTPPacket()
         
-        #pkHeader = pk.get_header()
         fp.set_header(CIPHERED_PORT, CIPHERED_CHANNEL)
-        #fp.port = pk.get_header()
         fp.data = bytearray([pk.get_header()])
         fp.data += bytearray([pidbyte])
         fp.data += bytearray(iv)
@@ -441,21 +430,20 @@ class RadioDriver(CRTPDriver):
         
         try:
             self.out_queue.put(fp, True, 2)
-            #print('    Sending 1 header: 0x%02x' % fp.get_header())
-            #print('           Sending 1: '+ '' .join("0x%02x " % b for b in fp.data))
         except queue.Full:
             if self.link_error_callback:
                 self.link_error_callback('RadioDriver: Could not send packet'
                                          ' to copter')
-        
+        '''
+        If a original packet is too large the packet is split, 
+        the second part is sent with the following code.
+        '''
         if multipacket:
             fp.data = bytearray([pk.get_header()])
             fp.data += bytearray([pidbyte])
             fp.data += bytearray(ciphertext[dataLength:])
             try:
                 self.out_queue.put(fp, True, 2)
-                #print('    Sending 2 header: 0x%02x' % fp.get_header())
-                #print('           Sending 2: ' + '' .join("0x%02x " % b for b in fp.data))
             except queue.Full:
                 if self.link_error_callback:
                     self.link_error_callback('RadioDriver: Could not send packet'
